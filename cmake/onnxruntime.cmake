@@ -143,14 +143,14 @@ if(SHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE)
     if(APPLE)
       set(location_onnxruntime_lib $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/libonnxruntime.dylib)
     elseif(WIN32)
-      if(SHERPA_ONNX_ENABLE_GPU)
-        set(location_onnxruntime_lib $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/onnxruntime.dll)
-        set(location_onnxruntime_lib2 $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/onnxruntime.lib)
-      else()
-        set(location_onnxruntime_lib $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/onnxruntime.lib)
-        if(SHERPA_ONNX_ENABLE_DIRECTML)
-          include(onnxruntime-win-x64-directml)
-        endif()
+      # A Windows shared-library import always needs both the runtime DLL and
+      # its import library. The upstream CPU branch assigned only the .lib and
+      # left location_onnxruntime_lib2 unset, producing an odd-length
+      # set_target_properties() call whenever a pre-installed CPU ORT was used.
+      set(location_onnxruntime_lib $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/onnxruntime.dll)
+      set(location_onnxruntime_lib2 $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/onnxruntime.lib)
+      if(SHERPA_ONNX_ENABLE_DIRECTML)
+        include(onnxruntime-win-x64-directml)
       endif()
     else()
       set(location_onnxruntime_lib $ENV{SHERPA_ONNXRUNTIME_LIB_DIR}/libonnxruntime.so)
@@ -188,8 +188,8 @@ if(location_onnxruntime_header_dir AND location_onnxruntime_lib)
 
     if(WIN32)
       set_target_properties(onnxruntime PROPERTIES
-        IMPORTED_LOCATION ${location_onnxruntime_lib}
-        IMPORTED_IMPLIB ${location_onnxruntime_lib2}
+        IMPORTED_LOCATION "${location_onnxruntime_lib}"
+        IMPORTED_IMPLIB "${location_onnxruntime_lib2}"
         INTERFACE_INCLUDE_DIRECTORIES "${location_onnxruntime_header_dir}"
       )
     else()

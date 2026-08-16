@@ -1,8 +1,10 @@
 # RunAnywhere Sherpa ONNX fork
 
 This fork tracks upstream sherpa-onnx and carries one Android-required behavior
-delta: Whisper greedy decoding retains the selected token's log probability so
-RunAnywhere can compute transcript confidence for its cloud-fallback router.
+deltas: Whisper greedy decoding retains the selected token's log probability so
+RunAnywhere can compute transcript confidence for its cloud-fallback router;
+the Windows pre-installed-ORT path also assigns both the runtime DLL and import
+library so CPU-only shared builds configure correctly.
 
 The current release line is based on upstream `v1.13.5`
 (`3dc7c569f31ca2cd4a20ed6f7db780327e6714c5`) and is built against ONNX Runtime
