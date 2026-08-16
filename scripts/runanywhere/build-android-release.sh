@@ -10,7 +10,7 @@ SHERPA_UPSTREAM_COMMIT="3dc7c569f31ca2cd4a20ed6f7db780327e6714c5"
 ONNX_RUNTIME_VERSION="1.29.0"
 ONNX_RUNTIME_COMMIT="2e2543fbe9fae542f921d47a72d21d5a4ef0b710"
 ONNX_RUNTIME_AAR_SHA256="e97540ca78fe36f6fe2013f82843414fb843b6c7681fb04644cba5e1406662dd"
-RUNANYWHERE_RELEASE_TAG="${RUNANYWHERE_RELEASE_TAG:-v1.13.5-rac.2}"
+RUNANYWHERE_RELEASE_TAG="${RUNANYWHERE_RELEASE_TAG:-v1.13.5-rac.3}"
 OUTPUT_DIR="${RUNANYWHERE_OUTPUT_DIR:-${REPO_ROOT}/dist}"
 REUSE_BUILD="${RUNANYWHERE_REUSE_BUILD:-0}"
 
@@ -48,6 +48,26 @@ fi
 mkdir -p "${ONNX_ROOT}"
 unzip -q "${ONNX_AAR}" -d "${ONNX_ROOT}"
 
+# Android's CMake toolchain overwrites CFLAGS/CXXFLAGS while initializing the
+# compiler. Inject the reproducibility maps as cache values instead, without
+# patching any of Sherpa's upstream per-ABI build scripts.
+REAL_CMAKE="$(command -v cmake)"
+CMAKE_WRAPPER_DIR="${TEMP_DIR}/cmake-wrapper"
+mkdir -p "${CMAKE_WRAPPER_DIR}"
+cat > "${CMAKE_WRAPPER_DIR}/cmake" <<'EOF'
+#!/usr/bin/env bash
+exec "${RUNANYWHERE_REAL_CMAKE}" \
+  "-DCMAKE_C_FLAGS=${RUNANYWHERE_PREFIX_MAP_FLAGS}" \
+  "-DCMAKE_CXX_FLAGS=${RUNANYWHERE_PREFIX_MAP_FLAGS}" \
+  "$@"
+EOF
+chmod +x "${CMAKE_WRAPPER_DIR}/cmake"
+export RUNANYWHERE_REAL_CMAKE="${REAL_CMAKE}"
+export RUNANYWHERE_PREFIX_MAP_FLAGS="-ffile-prefix-map=${REPO_ROOT}=/runanywhere-sherpa-onnx \
+-fmacro-prefix-map=${REPO_ROOT}=/runanywhere-sherpa-onnx \
+-fdebug-prefix-map=${REPO_ROOT}=/runanywhere-sherpa-onnx"
+export PATH="${CMAKE_WRAPPER_DIR}:${PATH}"
+
 readelf_candidates=("${ANDROID_NDK}"/toolchains/llvm/prebuilt/*/bin/llvm-readelf)
 READELF="${readelf_candidates[0]}"
 if [ ! -x "${READELF}" ]; then
@@ -68,12 +88,8 @@ build_abi() {
     rm -rf "${REPO_ROOT:?}/${build_dir}"
   fi
 
-  local reproducible_path_flags="-ffile-prefix-map=${REPO_ROOT}=/runanywhere-sherpa-onnx -fmacro-prefix-map=${REPO_ROOT}=/runanywhere-sherpa-onnx -fdebug-prefix-map=${REPO_ROOT}=/runanywhere-sherpa-onnx"
-
   env \
     ANDROID_NDK="${ANDROID_NDK}" \
-    CFLAGS="${reproducible_path_flags} ${CFLAGS:-}" \
-    CXXFLAGS="${reproducible_path_flags} ${CXXFLAGS:-}" \
     SHERPA_ONNX_ONNXRUNTIME_ROOT="${ONNX_ROOT}" \
     SHERPA_ONNX_ENABLE_C_API=ON \
     SHERPA_ONNX_ENABLE_TTS=ON \
