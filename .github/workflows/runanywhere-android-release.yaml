@@ -62,5 +62,5 @@ jobs:
           else
             gh release create "${GITHUB_REF_NAME}" "${archive}" \
               --title "RunAnywhere Sherpa ONNX ${GITHUB_REF_NAME}" \
-              --notes "Upstream Sherpa ONNX 1.13.5 with RunAnywhere Whisper confidence support, built against ONNX Runtime 1.29.0 for four Android ABIs."
+              --notes "Upstream Sherpa ONNX 1.13.5 with RunAnywhere Whisper confidence support, built against the cross-platform RunAnywhere ONNX Runtime 1.28.0 baseline for four Android ABIs."
           fi
