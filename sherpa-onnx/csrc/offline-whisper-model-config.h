@@ -84,6 +84,13 @@ struct OfflineWhisperSegment {
 struct OfflineWhisperDecoderResult {
   /// The decoded token IDs
   std::vector<int32_t> tokens;
+
+  /// Per-token log probability (log-softmax of the selected token's logit),
+  /// parallel to `tokens`. Populated by the greedy decoder so downstream
+  /// consumers can surface a confidence signal for Whisper, which otherwise
+  /// only emits token IDs.
+  std::vector<float> ys_log_probs;
+
   std::string lang;
 
   /// Cross-attention weights for token-level timestamps (if enabled)

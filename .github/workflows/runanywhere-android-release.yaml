@@ -1,0 +1,66 @@
+name: runanywhere-android-release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*-rac.*'
+    paths:
+      - '.github/workflows/runanywhere-android-release.yaml'
+      - 'scripts/runanywhere/build-android-release.sh'
+      - 'sherpa-onnx/csrc/offline-recognizer-whisper-impl.h'
+      - 'sherpa-onnx/csrc/offline-whisper-greedy-search-decoder.cc'
+      - 'sherpa-onnx/csrc/offline-whisper-model-config.h'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: runanywhere-android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Android NDK r27d
+        shell: bash
+        run: |
+          printf 'y\n' | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" "ndk;27.3.13750724"
+
+      - name: Build and validate four-ABI archive
+        shell: bash
+        run: |
+          export ANDROID_NDK="${ANDROID_SDK_ROOT}/ndk/27.3.13750724"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            export RUNANYWHERE_RELEASE_TAG="${GITHUB_REF_NAME}"
+          fi
+          ./scripts/runanywhere/build-android-release.sh
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-onnx-android-${{ github.ref_name }}
+          path: dist/*.tar.bz2
+          if-no-files-found: error
+
+      - name: Publish tagged release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="$(find dist -maxdepth 1 -type f -name '*.tar.bz2' -print -quit)"
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${archive}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${archive}" \
+              --title "RunAnywhere Sherpa ONNX ${GITHUB_REF_NAME}" \
+              --notes "Upstream Sherpa ONNX 1.13.5 with RunAnywhere Whisper confidence support, built against ONNX Runtime 1.29.0 for four Android ABIs."
+          fi

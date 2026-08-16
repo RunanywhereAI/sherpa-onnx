@@ -5,6 +5,7 @@
 #include "sherpa-onnx/csrc/offline-whisper-greedy-search-decoder.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -14,6 +15,31 @@
 #include "sherpa-onnx/csrc/onnx-utils.h"
 
 namespace sherpa_onnx {
+
+namespace {
+
+// Log-softmax of the logit at `idx`: log(softmax(logits))[idx]. Numerically
+// stable (subtracts the max logit). Used to attach a per-token confidence to
+// the greedily-selected Whisper token, since the upstream decoder otherwise
+// keeps only the argmax token id and discards the distribution.
+float LogSoftmaxAt(const float *logits, int32_t vocab_size, int32_t idx) {
+  if (logits == nullptr || vocab_size <= 0 || idx < 0 || idx >= vocab_size) {
+    return 0.0f;
+  }
+  float max_logit = logits[0];
+  for (int32_t i = 1; i < vocab_size; ++i) {
+    if (logits[i] > max_logit) {
+      max_logit = logits[i];
+    }
+  }
+  double sum_exp = 0.0;
+  for (int32_t i = 0; i < vocab_size; ++i) {
+    sum_exp += std::exp(static_cast<double>(logits[i] - max_logit));
+  }
+  return static_cast<float>((logits[idx] - max_logit) - std::log(sum_exp));
+}
+
+}  // namespace
 
 void OfflineWhisperGreedySearchDecoder::SetConfig(
     const OfflineWhisperModelConfig &config) {
@@ -137,6 +163,10 @@ OfflineWhisperGreedySearchDecoder::Decode(Ort::Value cross_k,
 
   int32_t n_text_ctx = model_->TextCtx();
   int32_t max_token_id = 0;
+  // Log-prob of the token currently held in max_token_id. Recomputed each time
+  // max_token_id is (re)selected, and pushed into predicted_logprobs alongside
+  // the token when it is committed below.
+  float pending_logprob = 0.0f;
 
   // Get initial logits
   {
@@ -150,12 +180,16 @@ OfflineWhisperGreedySearchDecoder::Decode(Ort::Value cross_k,
                           sample_begin, timestamp_begin, no_timestamps, eot,
                           kMaxInitialTimestampIndex);
       max_token_id = MaxElementIndex(logits_copy.data(), vocab_size);
+      pending_logprob =
+          LogSoftmaxAt(logits_copy.data(), vocab_size, max_token_id);
     } else {
       max_token_id = MaxElementIndex(p_start, vocab_size);
+      pending_logprob = LogSoftmaxAt(p_start, vocab_size, max_token_id);
     }
   }
 
   std::vector<int32_t> predicted_tokens;
+  std::vector<float> predicted_logprobs;
 
   // Storage for accumulated attention weights
   std::vector<std::vector<float>> all_attention_weights;
@@ -203,6 +237,7 @@ OfflineWhisperGreedySearchDecoder::Decode(Ort::Value cross_k,
     }
 
     predicted_tokens.push_back(max_token_id);
+    predicted_logprobs.push_back(pending_logprob);
     all_tokens.push_back(max_token_id);
 
     // Track if this is a timestamp token (for filtering in DTW)
@@ -262,8 +297,11 @@ OfflineWhisperGreedySearchDecoder::Decode(Ort::Value cross_k,
                           sample_begin, timestamp_begin, no_timestamps, eot,
                           -1);  // -1 = no max_initial constraint
       max_token_id = MaxElementIndex(logits_copy.data(), vocab_size);
+      pending_logprob =
+          LogSoftmaxAt(logits_copy.data(), vocab_size, max_token_id);
     } else {
       max_token_id = MaxElementIndex(p_logits, vocab_size);
+      pending_logprob = LogSoftmaxAt(p_logits, vocab_size, max_token_id);
     }
   }
 
@@ -277,6 +315,7 @@ OfflineWhisperGreedySearchDecoder::Decode(Ort::Value cross_k,
   }
 
   ans[0].tokens = std::move(predicted_tokens);
+  ans[0].ys_log_probs = std::move(predicted_logprobs);
 
   // Parse timestamp tokens into segments if using segment timestamp mode
   if (enable_segment_timestamps) {

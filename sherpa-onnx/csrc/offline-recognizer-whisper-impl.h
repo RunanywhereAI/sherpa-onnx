@@ -161,8 +161,14 @@ class OfflineRecognizerWhisperImpl : public OfflineRecognizerImpl {
     bool enable_segment_timestamps =
         config_.model_config.whisper.enable_segment_timestamps;
 
-    // Build text, skipping timestamp tokens if in segment timestamp mode
-    for (auto i : src.tokens) {
+    // Build text, skipping timestamp tokens if in segment timestamp mode.
+    // Keep r.ys_log_probs strictly parallel to r.tokens (the C API only
+    // surfaces ys_log_probs when its size equals the token count) by pushing
+    // the matching per-token log-prob whenever a token is kept.
+    const bool have_logprobs = src.ys_log_probs.size() == src.tokens.size();
+    r.ys_log_probs.reserve(src.tokens.size());
+    for (size_t idx = 0; idx < src.tokens.size(); ++idx) {
+      int32_t i = src.tokens[idx];
       // Skip timestamp tokens (they are >= timestamp_begin)
       if (enable_segment_timestamps && i >= timestamp_begin) {
         continue;
@@ -178,6 +184,15 @@ class OfflineRecognizerWhisperImpl : public OfflineRecognizerImpl {
 
       text += s;
       r.tokens.push_back(s);
+      if (have_logprobs) {
+        r.ys_log_probs.push_back(src.ys_log_probs[idx]);
+      }
+    }
+
+    // If any token was dropped the parallel invariant breaks; clear rather
+    // than emit a mismatched array the C API would silently ignore anyway.
+    if (r.ys_log_probs.size() != r.tokens.size()) {
+      r.ys_log_probs.clear();
     }
 
     r.text = text;
