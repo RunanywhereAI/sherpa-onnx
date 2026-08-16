@@ -90,8 +90,8 @@ if [[ "${platform}" == win-* ]]; then
     -A x64
     -DSHERPA_ONNX_USE_STATIC_CRT=ON
     -DBUILD_ESPEAK_NG_EXE=OFF
-    "-DCMAKE_C_FLAGS=/pathmap:${source_root_for_compiler}=C:/runanywhere/vendor/sherpa-onnx"
-    "-DCMAKE_CXX_FLAGS=/pathmap:${source_root_for_compiler}=C:/runanywhere/vendor/sherpa-onnx"
+    "-DCMAKE_C_FLAGS=/experimental:deterministic /Brepro /pathmap:${source_root_for_compiler}=C:/runanywhere/vendor/sherpa-onnx"
+    "-DCMAKE_CXX_FLAGS=/experimental:deterministic /Brepro /pathmap:${source_root_for_compiler}=C:/runanywhere/vendor/sherpa-onnx"
   )
 else
   prefix_flags="-ffile-prefix-map=${repo_root}=/runanywhere/vendor/sherpa-onnx -fmacro-prefix-map=${repo_root}=/runanywhere/vendor/sherpa-onnx -fdebug-prefix-map=${repo_root}=/runanywhere/vendor/sherpa-onnx"
