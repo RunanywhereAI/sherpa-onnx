@@ -85,10 +85,19 @@ cmake_args=(
 
 if [[ "${platform}" == win-* ]]; then
   ort_root="$(cygpath -m "${ort_root}")"
+  source_root_for_compiler="$(cygpath -m "${repo_root}")"
   cmake_args+=(
     -A x64
     -DSHERPA_ONNX_USE_STATIC_CRT=ON
     -DBUILD_ESPEAK_NG_EXE=OFF
+    "-DCMAKE_C_FLAGS=/pathmap:${source_root_for_compiler}=C:/runanywhere/vendor/sherpa-onnx"
+    "-DCMAKE_CXX_FLAGS=/pathmap:${source_root_for_compiler}=C:/runanywhere/vendor/sherpa-onnx"
+  )
+else
+  prefix_flags="-ffile-prefix-map=${repo_root}=/runanywhere/vendor/sherpa-onnx -fmacro-prefix-map=${repo_root}=/runanywhere/vendor/sherpa-onnx -fdebug-prefix-map=${repo_root}=/runanywhere/vendor/sherpa-onnx"
+  cmake_args+=(
+    "-DCMAKE_C_FLAGS=${prefix_flags}"
+    "-DCMAKE_CXX_FLAGS=${prefix_flags}"
   )
 fi
 
@@ -131,6 +140,13 @@ onnxruntime_asset=${ort_asset}
 onnxruntime_sha256=${ort_sha256}
 platform=${platform}
 EOF
+
+if LC_ALL=C grep -aErq \
+  '/home/runner/|/Users/[^/]+/|[A-Za-z]:[/\\]Users[/\\]|[A-Za-z]:[/\\]a[/\\]sherpa-onnx[/\\]sherpa-onnx' \
+  "${package_dir}/bin" "${package_dir}/lib"; then
+  printf 'error: packaged desktop runtime embeds a build-host path\n' >&2
+  exit 1
+fi
 
 archive="${dist_dir}/${package_name}.tar.bz2"
 if [[ "${platform}" == win-* ]]; then

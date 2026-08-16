@@ -1,7 +1,7 @@
 # RunAnywhere Sherpa ONNX fork
 
 This fork tracks upstream sherpa-onnx and carries one Android-required behavior
-deltas: Whisper greedy decoding retains the selected token's log probability so
+delta: Whisper greedy decoding retains the selected token's log probability so
 RunAnywhere can compute transcript confidence for its cloud-fallback router;
 the Windows pre-installed-ORT path also assigns both the runtime DLL and import
 library so CPU-only shared builds configure correctly.
@@ -30,4 +30,6 @@ Linux x64, Linux arm64, and Windows x64 releases are built from this same source
 against exact official ONNX Runtime 1.28.0 archives. Run them locally with
 `scripts/runanywhere/build-desktop-release.sh`; the
 `runanywhere-desktop-release` workflow publishes all three artifacts for a
-`v*-rac-desktop.*` tag.
+`v*-rac-desktop.*` tag. Desktop builds use deterministic source-prefix maps and
+the release fails closed if any packaged binary still contains a build-host
+path.
