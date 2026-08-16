@@ -1,0 +1,76 @@
+name: runanywhere-desktop-release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*-rac-desktop.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: runanywhere-desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            artifact: linux-x64
+          - runner: ubuntu-24.04-arm
+            artifact: linux-aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build aligned Linux release
+        shell: bash
+        run: ./scripts/runanywhere/build-desktop-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-onnx-${{ matrix.artifact }}-${{ github.ref_name }}
+          path: dist/*.tar.bz2
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build aligned Windows release
+        shell: bash
+        run: ./scripts/runanywhere/build-desktop-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-onnx-windows-x64-${{ github.ref_name }}
+          path: dist/*.tar.bz2
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sherpa-onnx-*-${{ github.ref_name }}
+          path: release-assets
+          merge-multiple: true
+      - name: Publish tagged release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release-assets/*.tar.bz2 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "RunAnywhere Sherpa ONNX ${GITHUB_REF_NAME}" \
+            --notes "Upstream Sherpa ONNX 1.13.5 built for Linux and Windows against the cross-platform RunAnywhere ONNX Runtime 1.28.0 baseline."
