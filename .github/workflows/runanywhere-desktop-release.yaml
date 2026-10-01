@@ -21,7 +21,8 @@ jobs:
         include:
           - runner: ubuntu-24.04
             artifact: linux-x64
-          - runner: ubuntu-24.04-arm
+          # 22.04, not 24.04: the arm64 libraries must load on glibc 2.35 (Ubuntu 22.04, Debian 12).
+          - runner: ubuntu-22.04-arm
             artifact: linux-aarch64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
