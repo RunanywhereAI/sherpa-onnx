@@ -19,9 +19,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-24.04
+          # 22.04, not 24.04: BOTH arches' libraries must load on glibc 2.35
+          # (Ubuntu 22.04, Debian 12). The arm64 job was moved to 22.04 on
+          # 2026-10-03; x64 was missed, and its 24.04 build carried
+          # GLIBC_2.38 / GLIBCXX_3.4.32, which failed every downstream link
+          # against it (wally's linux job: __isoc23_strtoll@GLIBC_2.38). Keep
+          # the two entries on the same floor.
+          - runner: ubuntu-22.04
             artifact: linux-x64
-          # 22.04, not 24.04: the arm64 libraries must load on glibc 2.35 (Ubuntu 22.04, Debian 12).
           - runner: ubuntu-22.04-arm
             artifact: linux-aarch64
     runs-on: ${{ matrix.runner }}
